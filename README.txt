@@ -10,15 +10,16 @@ Structure
   assets/frames/        48 opening-video frames (loaded progressively)
   assets/photos/        nahal-devika-lotus / closeup / story / final .webp
   assets/og-image.jpg   1200x630 WhatsApp preview image
+  assets/favicon.png    512x512 favicon
   assets/icons/         favicon
 
 Run / host
   Needs a web server (not double-click). Upload the whole folder to Netlify, Vercel,
-  GitHub Pages or Cloudflare Pages. Local test: python3 -m http.server, then open localhost:8000
+  GitHub Pages or Cloudflare Pages. Local test: python3 -m http.server, then open http://0.0.0.0:8000
 
 WhatsApp preview
-  In index.html replace https://YOUR-DOMAIN/assets/og-image.jpg with the real full URL
-  (WhatsApp only accepts absolute URLs). WhatsApp caches previews, so test with a fresh link.
+  OG image: assets/og-image.jpg (1200x630), referenced via https://nahal-devika.vercel.app/assets/og-image.jpg.
+  WhatsApp/Facebook cache previews; if an old one shows, append ?v=2 to the og:image URL or re-scrape via the Facebook Sharing Debugger.
 
 Change details: js/data.js (names, times, venues, map links, photos)
 Scene order is fixed: palace video, door, lotus, couple, close-up, lotus arch, peacock arch,

@@ -1,7 +1,7 @@
 /* Nahal & Devika – cinematic scroll invitation. Scene order is fixed:
    palace video → door portal → lotus → couple → close-up → lotus arch portal → peacock arch → groom/bride → story photo → reception → final */
 const D = weddingData, $ = s => document.querySelector(s);
-const maps = (q, u) => u || "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(q);
+const maps = (q, u) => (u && u.trim()) || "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(q);
 const first = s => s.split(",")[0].trim(), rest = s => s.split(",").slice(1).join(",").trim();
 const N = 48, fUrl = i => `assets/frames/f${String(i).padStart(2, "0")}.webp`;
 const ART = { lotus: "assets/art/lotus.webp", peacock: "assets/art/peacock.webp" };
@@ -29,7 +29,7 @@ const PeacockWorld = () => `<div id="peacock">
 
 const LotusWorld = () => `<div id="lotus">
  ${Ly("lBg", "lotus")}
- <div class="ly" id="lCouple"><div id="couple" style="position:absolute;left:29%;top:19.5%;width:42%;height:54%;overflow:hidden;border-radius:50% 50% 0 0/28% 28% 0 0;-webkit-mask-image:linear-gradient(#000 82%,transparent);mask-image:linear-gradient(#000 82%,transparent)">${ph("cpImg", "lotus", "46% 40%")}</div></div>
+ <div class="ly" id="lCouple"><div id="couple" style="position:absolute;left:27%;top:18.5%;width:46%;height:56%;overflow:hidden;border-radius:50% 50% 0 0/28% 28% 0 0;-webkit-mask-image:linear-gradient(#000 82%,transparent);mask-image:linear-gradient(#000 82%,transparent)">${ph("cpImg", "lotus", "46% 40%")}</div></div>
  <div class="ly" id="closeup" style="visibility:hidden;opacity:0">${ph("cuImg", "closeup", "56% 50%")}<div class="fx" style="background:radial-gradient(ellipse at 50% 45%,transparent 55%,rgba(22,39,28,.6))"></div></div>
  <div id="pk2">${PeacockWorld()}</div>
  ${Ly("lFol", "lotus", "radial-gradient(ellipse 26% 18% at 6% 8%,#000 50%,transparent 100%),radial-gradient(ellipse 26% 20% at 96% 10%,#000 50%,transparent 100%)", "sw")}
@@ -53,11 +53,10 @@ const copy = `
 <div class="tx" id="tMuh"><p class="lb">Muhurtham</p><p class="md">${D.muhurtham}</p></div>
 <div class="tx" id="tVen"><p class="md">${D.weddingVenue}</p><p class="sm gap">${D.weddingAddress}</p><a class="btn" href="${maps(D.weddingVenue + ", " + D.weddingAddress, D.weddingMap)}" target="_blank" rel="noopener">View location</a></div>
 <div class="tx lo" id="tNames"><p class="nm">${D.groom}</p><p class="it">&amp;</p><p class="nm">${D.bride}</p></div>
-<div class="tx lo" id="tTog"><p class="it" style="font-size:clamp(1.4rem,7vw,2.1rem)">Together, always.</p></div>
 <div class="tx dk" id="tGroom"><p class="lb">Groom</p><p class="lg">${D.groom}</p><p class="sm gap">Son of</p><p class="md" style="font-size:clamp(1.3rem,6vw,1.9rem)">${D.groomParents}</p><p class="sm gap">${first(D.groomAddress)}<br>${rest(D.groomAddress)}</p></div>
 <div class="tx dk" id="tBride"><p class="lb">Bride</p><p class="lg">${D.bride}</p><p class="sm gap">Daughter of</p><p class="md" style="font-size:clamp(1.3rem,6vw,1.9rem)">${D.brideParents}</p><p class="sm gap">${first(D.brideAddress)}<br>${rest(D.brideAddress)}</p></div>
 <div class="tx" id="tRec"><p class="lb">Reception Ceremony</p><p class="md">${D.receptionDate}</p><p class="lg" style="font-size:clamp(2rem,10vw,3.4rem)">${D.receptionTime}</p><p class="md gap" style="font-size:clamp(1.4rem,6.5vw,2.1rem)">${D.receptionVenue}</p><p class="sm">${first(D.receptionAddress)}<br>${rest(D.receptionAddress)}</p><a class="btn" href="${maps(D.receptionVenue + ", " + D.receptionAddress, D.receptionMap)}" target="_blank" rel="noopener">View location</a></div>
-<div class="tx lo" id="tFinal"><p class="it">With love,</p><p class="nm">${D.groom} &amp; ${D.bride}</p><p class="sm gap">We look forward to celebrating with you.</p><p class="dt">${D.dateShort}</p></div>`;
+<div class="tx lo" id="tFinal"><p class="it">With love,</p><p class="nm">${D.groom} &amp; ${D.bride}</p><p class="dt">${D.dateShort}</p></div>`;
 
 $("#root").innerHTML = OpeningWorld() + Closing() +
   `<div class="shade" id="scrimT" style="background:linear-gradient(rgba(22,39,28,.6),transparent 38%)"></div>
@@ -129,7 +128,6 @@ if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
     .fromTo("#cuImg", { scale: 1.02, yPercent: 2 }, { scale: 1.16, yPercent: -2, duration: 17 }, 46.5)
     .to("#lFol", { scale: 1.12, duration: 12 }, 46).to("#scrimL", { opacity: 0, duration: 3 }, 47)
     .to("#couple", { autoAlpha: 0, duration: 1 }, 50);
-  show("#tTog", 53, 58.5);
   T.to("#closeup", { autoAlpha: 0, duration: 6 }, 58);
 
   /* LotusPortal (58–71): the arch grows around the camera; the peacock arch is seen through it, then fills the screen */
@@ -152,7 +150,7 @@ if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
     .to("#story", { autoAlpha: 0, duration: 2.5 }, 94.5);
 
   /* Reception (96–107): day melts into warm evening */
-  T.to("#kEve", { opacity: .7, duration: 5 }, 95).to("#kGlow", { scale: 1.25, duration: 6 }, 95).to("#kParts", { opacity: 1, duration: 5 }, 97);
+  T.to("#kEve", { opacity: .78, duration: 5 }, 95).to("#kGlow", { scale: 1.25, duration: 6 }, 95).to("#kParts", { opacity: 1, duration: 5 }, 97);
   show("#tRec", 98.5, 106);
 
   /* ClosingPortrait (106–120) */
