@@ -1,13 +1,25 @@
-NAHAL & DEVIKA – Cinematic Scroll Wedding Invitation
-=====================================================
-Open index.html in a browser (needs internet for GSAP, Lenis and Google Fonts CDNs).
-To host: upload index.html to any static host (Netlify, Vercel, GitHub Pages, Cloudflare Pages) and share the link on WhatsApp.
+NAHAL & DEVIKA - Cinematic Scroll Wedding Invitation (v2)
 
-Edit details:  search for "weddingData" near the top of index.html
-  - names, dates, times, venues, addresses
-  - weddingMap / receptionMap : paste Google Maps links for the VIEW LOCATION buttons
-  - photos.couple / photos.final : path or data URI of the couple photos
-    (e.g. "assets/couple.webp"; transparent PNG/WebP cut-out looks best inside the arch)
+Structure
+  index.html            page shell + WhatsApp / Open Graph tags
+  css/style.css         styling and ambient animations
+  js/data.js            ALL wedding details + photo paths (edit here)
+  js/main.js            scenes: OpeningWorld, DoorPortal, LotusWorld, CoupleReveal, Close-up,
+                        LotusPortal, PeacockWorld, Groom/Bride, StoryPhoto, Reception, Closing
+  assets/art/           lotus + peacock artwork
+  assets/frames/        48 opening-video frames (loaded progressively)
+  assets/photos/        nahal-devika-lotus / closeup / story / final .webp
+  assets/og-image.jpg   1200x630 WhatsApp preview image
+  assets/icons/         favicon
 
-Scene order (do not change): palace video -> door -> lotus pond -> lotus arch -> peacock arch -> groom/bride/reception -> closing.
-Opening video is embedded as 48 WebP frames (const FRAMES). Artwork for lotus and peacock scenes is in ART_B64.
+Run / host
+  Needs a web server (not double-click). Upload the whole folder to Netlify, Vercel,
+  GitHub Pages or Cloudflare Pages. Local test: python3 -m http.server, then open localhost:8000
+
+WhatsApp preview
+  In index.html replace https://YOUR-DOMAIN/assets/og-image.jpg with the real full URL
+  (WhatsApp only accepts absolute URLs). WhatsApp caches previews, so test with a fresh link.
+
+Change details: js/data.js (names, times, venues, map links, photos)
+Scene order is fixed: palace video, door, lotus, couple, close-up, lotus arch, peacock arch,
+groom/bride, story photo, reception, final.
