@@ -387,7 +387,7 @@
     });
   }
 
-  function startPlaybackUnderCover(auto) {
+  function startPlaybackUnderCover() {
     if (finished) return;
 
     /* Decode Hero in parallel while the visitor watches the video */
@@ -439,11 +439,11 @@
             if (!video.paused) liftCover();
           }).catch(function () {
             video.removeEventListener('playing', onPlaying);
-            if (auto) { autoplayBlocked(); } else { finishReveal(); }
+            finishReveal();
           });
         } else {
           video.removeEventListener('playing', onPlaying);
-          if (auto) { autoplayBlocked(); } else { finishReveal(); }
+          finishReveal();
         }
       });
     } else if (!video.paused) {
@@ -452,11 +452,9 @@
 
     /* Tap path: never leave the cover up for long. Autoplay path: wait for
        the real "playing" event so the video is never shown while frozen. */
-    if (!auto) {
-      setTimeout(function () {
-        if (!coverLifted && !finished) liftCover();
-      }, 900);
-    }
+    setTimeout(function () {
+      if (!coverLifted && !finished) liftCover();
+    }, 900);
 
     setTimeout(function () { if (!finished && skipBtn) skipBtn.hidden = false; }, 5000);
 
@@ -493,15 +491,7 @@
   }
 
   function openInvitation() {
-    if (finished) return;
-    if (opening) {
-      /* Autoplay is still pending / was slow: a tap is a real gesture, so retry play() */
-      if (landing.classList.contains('needs-tap')) {
-        startAmbientAudio();
-        try { var r = video.play(); if (r && r.catch) r.catch(function () {}); } catch (e) {}
-      }
-      return;
-    }
+    if (opening || finished) return;
 
     opening = true;
     if (openBtn) openBtn.disabled = true;
@@ -511,48 +501,18 @@
     startAmbientAudio();
 
     if (!video) { finishReveal(); return; }
-    whenVideoReady(function () { startPlaybackUnderCover(false); });
+    whenVideoReady(startPlaybackUnderCover);
   }
 
-  /* Autoplay blocked (Low Power Mode, data saver, strict browser):
-     show the first frame with a quiet "Tap to Open". */
-  function autoplayBlocked() {
-    if (finished) return;
-    opening = false;
-    clearTimeout(safety);
-    revealBox.classList.remove('is-armed', 'is-on');
-    revealBox.setAttribute('aria-hidden', 'true');
-    landing.classList.remove('is-idle', 'is-opening');
-    landing.classList.add('needs-tap');
-    if (openBtn) { openBtn.disabled = false; try { openBtn.focus({ preventScroll: true }); } catch (e) {} }
-  }
-
-  /* Try to play immediately — this is the default experience. */
-  function autoStart() {
-    if (!video || opening || finished) return;
-    opening = true;
-    startPlaybackUnderCover(true);
-
-    /* If nothing is playing after a few seconds (slow network, strict browser),
-       offer "Tap to Open" over the first frame instead of leaving a silent screen. */
-    setTimeout(function () {
-      if (finished || !landing || landing.classList.contains('is-gone')) return;
-      if (!video || video.currentTime > 0) return;
-      landing.classList.remove('is-idle');
-      landing.classList.add('needs-tap');
-    }, 3500);
-  }
 
   if (openBtn) openBtn.addEventListener('click', openInvitation);
   if (landing) {
-    /* Whole cover is tappable once "Tap to Open" is showing */
+    /* Whole cover is tappable — button is the primary affordance */
     landing.addEventListener('click', function (e) {
-      if (!landing.classList.contains('needs-tap')) return;
       if (e.target.closest && e.target.closest('a, button')) return;
       openInvitation();
     });
   }
-  autoStart();
   if (skipBtn) skipBtn.addEventListener('click', finishReveal);
 
   if (video) {
@@ -709,7 +669,7 @@
 
     var vw = window.innerWidth, vh = window.innerHeight;
     var ticking = false, visible = false;
-    var STEPS = 15;            /* footfalls across the whole walk */
+    var STEPS = 9;             /* footfalls across the whole walk */
     var X_FROM = -40, X_TO = 112; /* vw: off-screen left → off-screen right */
 
     var stage = document.getElementById('peacockStage');
@@ -809,6 +769,7 @@
 
   if (document.readyState === 'complete') bootParticles();
   else window.addEventListener('load', bootParticles);
+
 
   /* ---------------------------------------------------------
      10 · Smooth anchor

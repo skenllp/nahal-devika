@@ -173,14 +173,16 @@
      1 · LANDING COVER  ·  first frame of the video. Stays quiet while the
          video autoplays; shows "Tap to Open" only if autoplay is blocked.
      ============================================================ -->
-  <section id="landing" class="scene--screen is-idle" aria-label="Wedding invitation cover">
+  <section id="landing" class="scene--screen" aria-label="Wedding invitation cover">
     <div class="landing-media">
       <img id="coverImg" class="cover-img section-bg" src="assets/poster/cover.webp" alt="" decoding="async"
-        fetchpriority="high" width="1080" height="1920">
+        fetchpriority="high">
       <div class="cover-fallback" aria-hidden="true"></div>
     </div>
 
+    <div class="rays rays--warm" aria-hidden="true"></div>
     <div class="vignette" aria-hidden="true"></div>
+    <div class="temple-glow" aria-hidden="true"></div>
     <div class="section-overlay landing-overlay" aria-hidden="true"></div>
 
     <div class="landing-inner section-content">
@@ -191,10 +193,12 @@
       </p>
 
       <div class="divider divider--sm" aria-hidden="true">
-            <span class="divider-line"></span>
-            <svg class="ico" aria-hidden="true"><use href="#i-lotus"></use></svg>
-            <span class="divider-line"></span>
-          </div>
+        <span class="divider-line"></span>
+        <svg class="ico" aria-hidden="true">
+          <use href="#i-lotus"></use>
+        </svg>
+        <span class="divider-line"></span>
+      </div>
 
       <h1 class="landing-names">
         <span class="n" style="color:#ffffff;" data-bind="groom">Nahal</span>
@@ -202,29 +206,33 @@
         <span class="n" style="color:#ffffff;" data-bind="bride">Devika</span>
       </h1>
 
-      <p class="landing-date"
-        style="color:#fff;letter-spacing:.44em;font-weight:600;text-shadow:0 1px 8px rgba(0,0,0,.6);" data-bind="dateNumeric">07 &bull; 02 &bull; 2027</p>
+      <p class="landing-date" data-bind="dateNumeric"
+        style="color:#fff;letter-spacing:.44em;font-weight:600;text-shadow:0 1px 8px rgba(0,0,0,.6);">07 &bull; 02 &bull; 2027</p>
 
       <button id="openBtn" class="btn-open" type="button">
         <span class="btn-open__glow" aria-hidden="true"></span>
         <span class="btn-open__ring" aria-hidden="true"></span>
         <span class="btn-open__inner">
-          <svg class="ico btn-open__lamp" aria-hidden="true"><use href="#i-lamp"></use></svg>
+          <svg class="ico btn-open__lamp" aria-hidden="true">
+            <use href="#i-lamp"></use>
+          </svg>
           <span class="btn-open__label">
-            <span class="btn-open__en">Tap to Open</span>
+            <span class="btn-open__en">Open Invitation</span>
           </span>
         </span>
         <span class="btn-open__shimmer" aria-hidden="true"></span>
       </button>
+
+      <p class="landing-hint" aria-hidden="true">Tap to begin</p>
     </div>
   </section>
 
 
   <!-- ============================================================
-     2 · OPENING VIDEO
+     2 · OPENING VIDEO  (plays after "Open Invitation")
      ============================================================ -->
   <section id="reveal" aria-hidden="true">
-    <video id="revealVideo" autoplay muted playsinline webkit-playsinline preload="auto" disablepictureinpicture
+    <video id="revealVideo" muted playsinline webkit-playsinline preload="auto" disablepictureinpicture
       disableremoteplayback controlslist="nodownload noplaybackrate noremoteplayback" poster="assets/poster/cover.webp">
       <source src="assets/video/opening.mp4" type="video/mp4">
     </video>
@@ -396,7 +404,7 @@
         <div class="couple-grid">
           <article class="person reveal" data-delay="1">
             <div class="portrait">
-              <img class="portrait-img" loading="lazy" decoding="async" src="assets/photos/groom.webp"
+              <img class="portrait-img" loading="lazy" decoding="async" src="assets/photos/groom.png"
                 width="900" height="1200" alt="Portrait of the groom, Nahal">
               <span class="portrait-ring" aria-hidden="true"></span>
             </div>
@@ -414,7 +422,7 @@
 
           <article class="person reveal" data-delay="2">
             <div class="portrait">
-              <img class="portrait-img" loading="lazy" decoding="async" src="assets/photos/bride.webp"
+              <img class="portrait-img" loading="lazy" decoding="async" src="assets/photos/bride.png"
                 width="900" height="1200" alt="Portrait of the bride, Devika">
               <span class="portrait-ring" aria-hidden="true"></span>
             </div>
@@ -689,11 +697,7 @@
       <div class="section-content section-content--center">
 
         <div class="gratitude-card reveal">
-          <div class="gratitude-photo">
-            <img src="assets/photos/couple-06.webp" width="1000" height="1500" alt="Nahal and Devika" loading="lazy"
-              decoding="async">
-          </div>
-          <p class="gratitude-kicker">With love,</p>
+          <p class="gratitude-kicker">Gratitude</p>
           <div class="divider divider--light divider--sm" aria-hidden="true">
             <span class="divider-line"></span>
             <svg class="ico" aria-hidden="true"><use href="#i-lotus"></use></svg>
@@ -704,7 +708,7 @@
             presence and blessings for our new beginning.
           </p>
           <p class="gratitude-names"><span data-bind="groom">Nahal</span> &amp; <span data-bind="bride">Devika</span></p>
-          <p class="gratitude-date" data-bind="dateNumeric">07 &bull; 02 &bull; 2027</p>
+          <p class="gratitude-date" data-bind="weddingDateLong">Sunday, 7 February 2027</p>
         </div>
 
       </div>

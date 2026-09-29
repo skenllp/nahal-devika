@@ -8,8 +8,8 @@ index.html
 css/        style.css, scenes.css
 js/         data.js (all editable wedding details + map links), main.js, particles.js
 assets/
-  video/    opening.mp4            opening invitation (autoplay, muted, inline)
-  poster/   cover.webp             first frame of the video (cover / poster)
+  video/    opening.mp4            opening invitation (plays after "Open Invitation" is tapped)
+  poster/   cover.webp             first frame of the video (cover screen + poster)
   hero/     hero.webp              hero artwork
   photos/   couple-01…07.webp, groom.webp, bride.webp
   decor/    peacock.webp, wash-*.svg
