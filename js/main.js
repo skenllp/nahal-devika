@@ -1,162 +1,858 @@
-/* Nahal & Devika – cinematic scroll invitation. Scene order is fixed:
-   palace video → door portal → lotus → couple → close-up → lotus arch portal → peacock arch → groom/bride → story photo → reception → final */
-const D = weddingData, $ = s => document.querySelector(s);
-const maps = (q, u) => (u && u.trim()) || "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(q);
-const first = s => s.split(",")[0].trim(), rest = s => s.split(",").slice(1).join(",").trim();
-const N = 48, fUrl = i => `assets/frames/f${String(i).padStart(2, "0")}.webp`;
-const ART = { lotus: "assets/art/lotus.webp", peacock: "assets/art/peacock.webp" };
-const Ly = (id, a, mask = "", cls = "") => `<div class="ly ${cls}" id="${id}"${mask ? ` style="-webkit-mask-image:${mask};mask-image:${mask}"` : ""}><img data-s="${ART[a]}" alt="" draggable="false" decoding="async"></div>`;
-const ph = (id, k, pos) => `<img id="${id}" data-s="${D.photos[k]}" alt="${D.groom} and ${D.bride}" draggable="false" decoding="async" style="object-position:${pos}">`;
-const rnd = (n, f) => Array.from({ length: n }, (_, i) => f(i)).join("");
-const petals = rnd(7, i => `<span class="pet" style="left:${8 + i * 13}%;animation-delay:-${i * 2.6}s;animation-duration:${16 + i * 2}s"></span>`);
-const flies = rnd(12, i => `<span class="fly" style="left:${8 + i * 7.5}%;top:${55 + (i * 13) % 40}%;animation-delay:-${i * .6}s"></span>`);
-/* arch-shaped clip helper: same structure start→end so GSAP can tween it */
-const CP = "round 50% 50% 0 0/28% 28% 0 0";
-const clip = (t, r, b, l, rad = "50% 50% 3% 3%/60% 60% 0 0") => `inset(${t}% ${r}% ${b}% ${l}% round ${rad})`;
-const CE = clip(0, 0, 0, 0, "0% 0% 0% 0%/0% 0% 0% 0%");
+/* ============================================================
+   Nahal & Devika · cinematic flow controller
+   Opening video (autoplay) → hero → scroll journey
 
-/* ---------- components (markup) ---------- */
-const PeacockWorld = () => `<div id="peacock">
- ${Ly("kBg", "peacock")}<div class="ly fx"><div class="mist"></div></div>
- <div class="ly" id="story" style="visibility:hidden;opacity:0">${ph("stImg", "story", "50% 45%")}
-  <div class="fx" id="sun" style="opacity:.15;background:radial-gradient(ellipse at 85% 6%,rgba(255,200,110,.9),transparent 60%);mix-blend-mode:screen"></div>
-  <div class="fx" style="background:radial-gradient(ellipse at 50% 50%,transparent 60%,rgba(22,39,28,.45))"></div></div>
- ${Ly("kVin", "peacock", "radial-gradient(ellipse 12% 30% at 6% 45%,#000 55%,transparent 100%),radial-gradient(ellipse 12% 30% at 95% 45%,#000 55%,transparent 100%)", "vin")}
- ${Ly("kLamp", "peacock", "radial-gradient(ellipse 9% 9% at 50% 21%,#000 55%,transparent 100%)", "lamp")}
- <div class="ly fx glow" id="kGlow"><div></div></div>
- <div class="fx" id="kEve" style="opacity:0;background:linear-gradient(rgba(125,64,44,.75),rgba(22,39,28,.85));mix-blend-mode:multiply"></div>
- <div class="fx" id="kParts" style="opacity:0">${flies}</div></div>`;
+   The cover is the video's own first frame. It stays up silently
+   until the video is really playing, so there is never a blank
+   beat. If the browser blocks autoplay, the cover shows a
+   "Tap to Open" button and the tap starts the same video.
+   ============================================================ */
+(function () {
+  'use strict';
 
-const LotusWorld = () => `<div id="lotus">
- ${Ly("lBg", "lotus")}
- <div class="ly" id="lCouple"><div id="couple" style="position:absolute;left:27%;top:18.5%;width:46%;height:56%;overflow:hidden;border-radius:50% 50% 0 0/28% 28% 0 0;-webkit-mask-image:linear-gradient(#000 82%,transparent);mask-image:linear-gradient(#000 82%,transparent)">${ph("cpImg", "lotus", "46% 40%")}</div></div>
- <div class="ly" id="closeup" style="visibility:hidden;opacity:0">${ph("cuImg", "closeup", "56% 50%")}<div class="fx" style="background:radial-gradient(ellipse at 50% 45%,transparent 55%,rgba(22,39,28,.6))"></div></div>
- <div id="pk2">${PeacockWorld()}</div>
- ${Ly("lFol", "lotus", "radial-gradient(ellipse 26% 18% at 6% 8%,#000 50%,transparent 100%),radial-gradient(ellipse 26% 20% at 96% 10%,#000 50%,transparent 100%)", "sw")}
- <div class="ly fx" id="lWater"><div class="shimmer"></div></div>
- ${Ly("lFront", "lotus", "linear-gradient(to bottom,transparent 72%,#000 88%)", "sw")}
- <div class="ly fx" id="lPet">${petals}</div>
- <div class="fx" id="lWarm" style="opacity:0;background:linear-gradient(rgba(201,154,83,.4),rgba(199,93,118,.25));mix-blend-mode:soft-light"></div></div>`;
+  var body = document.body;
+  var landing = document.getElementById('landing');
+  var openBtn = document.getElementById('openBtn');
+  var revealBox = document.getElementById('reveal');
+  var video = document.getElementById('revealVideo');
+  var skipBtn = document.getElementById('skipBtn');
+  var heroImg = document.getElementById('heroImg');
 
-const OpeningWorld = () => `<div class="w" id="palace"><canvas id="vid" width="540" height="960"></canvas>
- <div class="fx" id="vig" style="opacity:0;background:radial-gradient(ellipse at 48.4% 58.8%,transparent 10%,rgba(10,16,12,.85) 70%)"></div>
- <div id="portal"><div id="glowIn"></div>${LotusWorld()}</div></div>`;
+  var COVER_FADE_MS = 420;
+  var READY_TIMEOUT_MS = 10000;
+  var PLAY_SAFETY_MS = 14000;
 
-const Closing = () => `<div id="final"><div class="ly" id="fPhoto">${ph("fImg", "final", "50% 30%")}</div>
- <div class="w" style="pointer-events:none;z-index:6">${Ly("fFg", "lotus", "linear-gradient(to bottom,transparent 84%,#000 95%)")}</div>
- <div class="shade" style="background:linear-gradient(transparent 50%,rgba(22,39,28,.88))"></div></div>`;
+  /* ---------------------------------------------------------
+     0 · Ambient audio  ·  disc control + play after cover open
+     --------------------------------------------------------- */
+  var bgAudio = document.getElementById('bgAudio');
+  var audioBtn = document.getElementById('audioBtn');
+  var audioStarted = false;
 
-const copy = `
-<div class="tx hi on" id="tIntro"><h1 class="nm">${D.groom}<i>♥</i>${D.bride}</h1><p class="dt">${D.dateShort}</p></div>
-<div class="tx" id="tJourney"><p class="it">Together with their families<br>invite you to celebrate their wedding</p></div>
-<div class="tx" id="tCer"><p class="lb">Wedding Ceremony</p><p class="md">${D.weddingDay}</p><p class="lg">${D.weddingDate}</p></div>
-<div class="tx" id="tMuh"><p class="lb">Muhurtham</p><p class="md">${D.muhurtham}</p></div>
-<div class="tx" id="tVen"><p class="md">${D.weddingVenue}</p><p class="sm gap">${D.weddingAddress}</p><a class="btn" href="${maps(D.weddingVenue + ", " + D.weddingAddress, D.weddingMap)}" target="_blank" rel="noopener">View location</a></div>
-<div class="tx lo" id="tNames"><p class="nm">${D.groom}</p><p class="it">&amp;</p><p class="nm">${D.bride}</p></div>
-<div class="tx dk" id="tGroom"><p class="lb">Groom</p><p class="lg">${D.groom}</p><p class="sm gap">Son of</p><p class="md" style="font-size:clamp(1.3rem,6vw,1.9rem)">${D.groomParents}</p><p class="sm gap">${first(D.groomAddress)}<br>${rest(D.groomAddress)}</p></div>
-<div class="tx dk" id="tBride"><p class="lb">Bride</p><p class="lg">${D.bride}</p><p class="sm gap">Daughter of</p><p class="md" style="font-size:clamp(1.3rem,6vw,1.9rem)">${D.brideParents}</p><p class="sm gap">${first(D.brideAddress)}<br>${rest(D.brideAddress)}</p></div>
-<div class="tx" id="tRec"><p class="lb">Reception Ceremony</p><p class="md">${D.receptionDate}</p><p class="lg" style="font-size:clamp(2rem,10vw,3.4rem)">${D.receptionTime}</p><p class="md gap" style="font-size:clamp(1.4rem,6.5vw,2.1rem)">${D.receptionVenue}</p><p class="sm">${first(D.receptionAddress)}<br>${rest(D.receptionAddress)}</p><a class="btn" href="${maps(D.receptionVenue + ", " + D.receptionAddress, D.receptionMap)}" target="_blank" rel="noopener">View location</a></div>
-<div class="tx lo" id="tFinal"><p class="it">With love,</p><p class="nm">${D.groom} &amp; ${D.bride}</p><p class="dt">${D.dateShort}</p></div>`;
+  function setAudioUi(playing) {
+    if (!audioBtn) return;
+    audioBtn.classList.toggle('is-playing', playing);
+    audioBtn.setAttribute('aria-pressed', playing ? 'true' : 'false');
+    audioBtn.setAttribute('aria-label', playing ? 'Pause music' : 'Play music');
+  }
 
-$("#root").innerHTML = OpeningWorld() + Closing() +
-  `<div class="shade" id="scrimT" style="background:linear-gradient(rgba(22,39,28,.6),transparent 38%)"></div>
-   <div class="shade" id="scrimL" style="opacity:0;background:linear-gradient(rgba(22,39,28,.1),rgba(22,39,28,.55) 45%,rgba(22,39,28,.7))"></div>` + copy + `<div id="hint">SCROLL</div>`;
+  function showAudioControl() {
+    if (!audioBtn) return;
+    audioBtn.hidden = false;
+    requestAnimationFrame(function () {
+      audioBtn.classList.add('is-visible');
+    });
+  }
 
-/* ---------- reduced motion: calm static story ---------- */
-if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
-  document.body.classList.add("rm");
-  [[fUrl(0), ["tIntro"]], [ART.lotus, ["tCer", "tMuh", "tVen"]], [D.photos.lotus, ["tNames"]], [ART.peacock, ["tGroom", "tBride", "tRec"]], [D.photos.final, ["tFinal"]]].forEach(([u, ids]) => {
-    const s = document.createElement("section"); s.className = "rmS"; s.style.backgroundImage = `linear-gradient(rgba(22,39,28,.35),rgba(22,39,28,.35)),url(${u})`;
-    ids.forEach(id => { const c = document.getElementById(id).cloneNode(true); c.removeAttribute("id"); c.classList.add("on"); s.appendChild(c) }); $("#static").appendChild(s);
+  function startAmbientAudio() {
+    if (!bgAudio || audioStarted) return;
+    audioStarted = true;
+    showAudioControl();
+
+    bgAudio.volume = 0.72;
+    var play = bgAudio.play();
+    if (play && play.then) {
+      play.then(function () {
+        setAudioUi(true);
+      }).catch(function () {
+        /* Blocked — control stays visible so the guest can tap it */
+        audioStarted = false;
+        setAudioUi(false);
+      });
+    } else if (!bgAudio.paused) {
+      setAudioUi(true);
+    }
+  }
+
+  /* Music starts on the first interaction the browser accepts as a gesture
+     (tap / click / key). Listeners stay armed until playback really begins,
+     and never override a guest who paused the music. */
+  var userPaused = false;
+  var gestureEvents = ['pointerup', 'touchend', 'click', 'keydown'];
+  function onFirstGesture() {
+    if (userPaused || !bgAudio) return;
+    audioStarted = true;
+    showAudioControl();
+    bgAudio.volume = 0.72;
+    var p = bgAudio.play();
+    if (p && p.then) {
+      p.then(disarmGesture).catch(function () { audioStarted = false; });
+    } else {
+      disarmGesture();
+    }
+  }
+  function disarmGesture() {
+    gestureEvents.forEach(function (ev) { document.removeEventListener(ev, onFirstGesture, true); });
+  }
+  if (bgAudio) {
+    gestureEvents.forEach(function (ev) { document.addEventListener(ev, onFirstGesture, true); });
+  }
+
+  function toggleAmbientAudio() {
+    if (!bgAudio) return;
+    if (bgAudio.paused) {
+      userPaused = false;
+      var play = bgAudio.play();
+      if (play && play.then) {
+        play.then(function () { setAudioUi(true); }).catch(function () { setAudioUi(false); });
+      } else {
+        setAudioUi(!bgAudio.paused);
+      }
+    } else {
+      userPaused = true;
+      bgAudio.pause();
+      setAudioUi(false);
+    }
+  }
+
+  if (audioBtn) audioBtn.addEventListener('click', toggleAmbientAudio);
+  if (bgAudio) {
+    bgAudio.addEventListener('play', function () { setAudioUi(true); });
+    bgAudio.addEventListener('pause', function () { setAudioUi(false); });
+    bgAudio.addEventListener('ended', function () { setAudioUi(false); });
+  }
+
+  /* ---------------------------------------------------------
+     1 · Image fallback chain + graceful placeholders
+     --------------------------------------------------------- */
+  function markMissing(img) {
+    img.classList.add('failed');
+    var host = img.parentElement;
+    if (!host) return;
+
+    if (img.classList.contains('cover-img') || img.classList.contains('section-bg') || img.classList.contains('bleed') || img.id === 'heroImg') {
+      if (host.classList.contains('landing-media') || host.classList.contains('scene-frame') || host.classList.contains('scene') || host.id === 'reveal') {
+        host.classList.add('fallback-on');
+      }
+    } else if (host.classList.contains('portrait') || host.classList.contains('tile') || host.classList.contains('photo-card__paper')) {
+      var emptyHost = host.classList.contains('photo-card__paper') ? host.closest('.photo-card') || host : host;
+      emptyHost.classList.add('is-empty');
+      emptyHost.setAttribute('data-label', img.getAttribute('data-placeholder') || 'Photo');
+      if (host.classList.contains('photo-card__paper')) {
+        host.setAttribute('data-label', img.getAttribute('data-placeholder') || 'Photo');
+      }
+    }
+  }
+
+  function wireImage(img) {
+    var queue = (img.getAttribute('data-fallbacks') || '')
+      .split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+
+    img.addEventListener('error', function () {
+      if (queue.length) { img.src = queue.shift(); return; }
+      markMissing(img);
+    });
+
+    if (img.complete && img.naturalWidth === 0) {
+      if (queue.length) img.src = queue.shift();
+      else markMissing(img);
+    }
+  }
+
+  Array.prototype.forEach.call(
+    document.querySelectorAll('img[data-fallbacks], img[data-placeholder]'),
+    wireImage
+  );
+
+  /* ---------------------------------------------------------
+     2 · Scroll lock
+     --------------------------------------------------------- */
+  function blockTouch(e) { if (body.classList.contains('is-locked')) e.preventDefault(); }
+  document.addEventListener('touchmove', blockTouch, { passive: false });
+
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+
+  function jumpToTop() {
+    var root = document.documentElement;
+    var prev = root.style.scrollBehavior;
+    root.style.scrollBehavior = 'auto';
+    window.scrollTo(0, 0);
+    root.style.scrollBehavior = prev;
+  }
+
+  function unlockScroll() {
+    body.classList.remove('is-locked');
+    jumpToTop();
+  }
+
+  /* ---------------------------------------------------------
+     3 · Video preload  ·  starts the moment the page opens
+     --------------------------------------------------------- */
+  var videoReady = false;
+  var opening = false;
+  var finished = false;
+  var safety = 0;
+  var readyWait = 0;
+
+  function markVideoReady() {
+    videoReady = true;
+  }
+
+  function isVideoReady() {
+    /* HAVE_FUTURE_DATA (3) / HAVE_ENOUGH_DATA (4) — enough to start without a stall */
+    return video && !video.error && video.readyState >= 3;
+  }
+
+  function beginVideoPreload() {
+    if (!video) return;
+
+    video.muted = true;
+    video.setAttribute('muted', '');
+    video.playsInline = true;
+    video.setAttribute('playsinline', '');
+    video.setAttribute('webkit-playsinline', '');
+    video.preload = 'auto';
+
+    /* Force the network request even when the element is hidden */
+    try { video.load(); } catch (e) {}
+
+    var onReady = function () {
+      markVideoReady();
+      video.removeEventListener('canplay', onReady);
+      video.removeEventListener('canplaythrough', onReady);
+      video.removeEventListener('loadeddata', onReady);
+    };
+
+    video.addEventListener('canplay', onReady);
+    video.addEventListener('canplaythrough', onReady);
+    video.addEventListener('loadeddata', onReady);
+
+    if (isVideoReady()) markVideoReady();
+  }
+
+  beginVideoPreload();
+
+  /* ---------------------------------------------------------
+     4 · Hero gate  ·  never show until bg is loaded + decoded
+     --------------------------------------------------------- */
+  var heroEl = document.getElementById('hero');
+  var heroReadyPromise = null;
+  var heroIsReady = false;
+  var TEXT_REVEAL_MS = 520; /* after .loaded fade starts */
+
+  var HERO_CANDIDATES = (
+    (heroImg && heroImg.getAttribute('data-candidates')) ||
+    'assets/hero/hero.webp'
+  ).split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+
+  function loadAndDecodeUrl(url) {
+    return new Promise(function (resolve, reject) {
+      var probe = new Image();
+      probe.decoding = 'async';
+
+      function succeed() {
+        if (probe.decode) {
+          probe.decode().then(function () { resolve(url); }).catch(function () { resolve(url); });
+        } else {
+          resolve(url);
+        }
+      }
+
+      probe.onload = succeed;
+      probe.onerror = function () { reject(new Error('fail ' + url)); };
+      probe.src = url;
+
+      /* Cached image may already be complete */
+      if (probe.complete && probe.naturalWidth > 0) succeed();
+    });
+  }
+
+  function firstAvailable(urls, index) {
+    index = index || 0;
+    if (index >= urls.length) {
+      return Promise.reject(new Error('no hero asset'));
+    }
+    return loadAndDecodeUrl(urls[index]).catch(function () {
+      return firstAvailable(urls, index + 1);
+    });
+  }
+
+  function warmFonts() {
+    if (!(document.fonts && document.fonts.load)) return Promise.resolve();
+    return Promise.all([
+      document.fonts.load('300 48px "Cormorant Garamond"'),
+      document.fonts.load('400 18px Marcellus')
+    ]).catch(function () {});
+  }
+
+  function applyHeroUrl(url) {
+    if (!heroImg || !url) return Promise.resolve();
+    heroImg.src = url;
+    if (heroImg.decode) {
+      return heroImg.decode().catch(function () {});
+    }
+    return Promise.resolve();
+  }
+
+  function ensureHeroReady() {
+    if (heroIsReady) return Promise.resolve(true);
+    if (heroReadyPromise) return heroReadyPromise;
+
+    heroReadyPromise = firstAvailable(HERO_CANDIDATES)
+      .then(function (url) {
+        return applyHeroUrl(url).then(function () { return url; });
+      })
+      .then(function () {
+        return warmFonts();
+      })
+      .then(function () {
+        heroIsReady = true;
+        if (heroEl) {
+          /* Paint one frame while still under the video / hidden */
+          void heroEl.offsetWidth;
+        }
+        return true;
+      })
+      .catch(function () {
+        /* Absolute fallback — paint the PNG rather than stall forever */
+        if (heroImg) heroImg.src = 'assets/hero/hero.webp';
+        heroIsReady = true;
+        return false;
+      });
+
+    return heroReadyPromise;
+  }
+
+  /* Start hero preload once the intro has enough video data (video wins the pipe) */
+  function scheduleHeroWarm() {
+    if (heroReadyPromise) return;
+    if (isVideoReady() || !video) {
+      ensureHeroReady();
+      return;
+    }
+    var once = function () {
+      video.removeEventListener('canplay', once);
+      ensureHeroReady();
+    };
+    video.addEventListener('canplay', once);
+    setTimeout(function () { ensureHeroReady(); }, 5000);
+  }
+
+  if (document.readyState === 'complete') scheduleHeroWarm();
+  else window.addEventListener('load', scheduleHeroWarm);
+
+  /* ---------------------------------------------------------
+     5 · Landing → video → hero
+     --------------------------------------------------------- */
+  function revealHeroAndSite() {
+    if (heroEl) {
+      heroEl.classList.add('loaded');
+      heroEl.setAttribute('aria-busy', 'false');
+    }
+
+    body.classList.add('is-revealed');
+    unlockScroll();
+    showAudioControl();
+    initReveals();
+    initGalleryWall();
+    initPeacock();
+    activateLazySections();
+
+    /* Background fade first; typography follows */
+    setTimeout(function () {
+      if (heroEl) heroEl.classList.add('text-ready');
+    }, TEXT_REVEAL_MS);
+
+    revealBox.classList.remove('is-armed', 'is-on');
+    revealBox.classList.add('is-out', 'is-live');
+
+    setTimeout(function () {
+      revealBox.classList.add('is-gone');
+      revealBox.setAttribute('aria-hidden', 'true');
+      try {
+        video.pause();
+        video.removeAttribute('src');
+        while (video.firstChild) video.removeChild(video.firstChild);
+        video.load();
+      } catch (e) {}
+    }, 900);
+  }
+
+  function finishReveal() {
+    if (finished) return;
+    finished = true;
+    clearTimeout(safety);
+    clearTimeout(readyWait);
+
+    /* Freeze the last frame so the visitor never sees black while Hero decodes */
+    try {
+      video.pause();
+      if (video.duration && isFinite(video.duration)) {
+        video.currentTime = Math.max(0, video.duration - 0.05);
+      }
+    } catch (e) {}
+
+    ensureHeroReady().then(function () {
+      revealHeroAndSite();
+    });
+  }
+
+  function startPlaybackUnderCover(auto) {
+    if (finished) return;
+
+    /* Decode Hero in parallel while the visitor watches the video */
+    ensureHeroReady();
+
+    /* Arm the video layer UNDER the cover (z-index 60 < 70).
+       It paints and plays while the cover still hides it. */
+    revealBox.classList.add('is-armed');
+    revealBox.removeAttribute('aria-hidden');
+
+    try { video.currentTime = 0; } catch (e) {}
+
+    var coverLifted = false;
+    function liftCover() {
+      if (coverLifted || finished) return;
+      coverLifted = true;
+
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          landing.classList.remove('is-opening');
+          landing.classList.add('is-out');
+
+          setTimeout(function () {
+            landing.classList.add('is-gone');
+            revealBox.classList.add('is-on', 'is-live');
+            revealBox.classList.remove('is-armed');
+          }, COVER_FADE_MS);
+        });
+      });
+    }
+
+    function onPlaying() {
+      video.removeEventListener('playing', onPlaying);
+      liftCover();
+      ensureHeroReady();
+    }
+    video.addEventListener('playing', onPlaying);
+
+    var attempt = video.play();
+    if (attempt && attempt.then) {
+      attempt.then(function () {
+        if (!video.paused) liftCover();
+      }).catch(function () {
+        video.muted = true;
+        video.setAttribute('muted', '');
+        var retry = video.play();
+        if (retry && retry.then) {
+          retry.then(function () {
+            if (!video.paused) liftCover();
+          }).catch(function () {
+            video.removeEventListener('playing', onPlaying);
+            if (auto) { autoplayBlocked(); } else { finishReveal(); }
+          });
+        } else {
+          video.removeEventListener('playing', onPlaying);
+          if (auto) { autoplayBlocked(); } else { finishReveal(); }
+        }
+      });
+    } else if (!video.paused) {
+      liftCover();
+    }
+
+    /* Tap path: never leave the cover up for long. Autoplay path: wait for
+       the real "playing" event so the video is never shown while frozen. */
+    if (!auto) {
+      setTimeout(function () {
+        if (!coverLifted && !finished) liftCover();
+      }, 900);
+    }
+
+    setTimeout(function () { if (!finished && skipBtn) skipBtn.hidden = false; }, 5000);
+
+    safety = setTimeout(function () {
+      if (!finished && (video.readyState < 2 || video.paused)) finishReveal();
+    }, PLAY_SAFETY_MS);
+  }
+
+  function whenVideoReady(done) {
+    if (isVideoReady() || videoReady) {
+      done();
+      return;
+    }
+
+    var settled = false;
+    function settle() {
+      if (settled) return;
+      settled = true;
+      video.removeEventListener('canplay', settle);
+      video.removeEventListener('canplaythrough', settle);
+      video.removeEventListener('loadeddata', settle);
+      clearTimeout(readyWait);
+      done();
+    }
+
+    video.addEventListener('canplay', settle);
+    video.addEventListener('canplaythrough', settle);
+    video.addEventListener('loadeddata', settle);
+
+    /* Keep nudging the buffer while the cover stays up */
+    try { video.load(); } catch (e) {}
+
+    readyWait = setTimeout(settle, READY_TIMEOUT_MS);
+  }
+
+  function openInvitation() {
+    if (finished) return;
+    if (opening) {
+      /* Autoplay is still pending / was slow: a tap is a real gesture, so retry play() */
+      if (landing.classList.contains('needs-tap')) {
+        startAmbientAudio();
+        try { var r = video.play(); if (r && r.catch) r.catch(function () {}); } catch (e) {}
+      }
+      return;
+    }
+
+    opening = true;
+    if (openBtn) openBtn.disabled = true;
+    landing.classList.add('is-opening');
+
+    /* Kick off music in the same user gesture so unmuted play is allowed */
+    startAmbientAudio();
+
+    if (!video) { finishReveal(); return; }
+    whenVideoReady(function () { startPlaybackUnderCover(false); });
+  }
+
+  /* Autoplay blocked (Low Power Mode, data saver, strict browser):
+     show the first frame with a quiet "Tap to Open". */
+  function autoplayBlocked() {
+    if (finished) return;
+    opening = false;
+    clearTimeout(safety);
+    revealBox.classList.remove('is-armed', 'is-on');
+    revealBox.setAttribute('aria-hidden', 'true');
+    landing.classList.remove('is-idle', 'is-opening');
+    landing.classList.add('needs-tap');
+    if (openBtn) { openBtn.disabled = false; try { openBtn.focus({ preventScroll: true }); } catch (e) {} }
+  }
+
+  /* Try to play immediately — this is the default experience. */
+  function autoStart() {
+    if (!video || opening || finished) return;
+    opening = true;
+    startPlaybackUnderCover(true);
+
+    /* If nothing is playing after a few seconds (slow network, strict browser),
+       offer "Tap to Open" over the first frame instead of leaving a silent screen. */
+    setTimeout(function () {
+      if (finished || !landing || landing.classList.contains('is-gone')) return;
+      if (!video || video.currentTime > 0) return;
+      landing.classList.remove('is-idle');
+      landing.classList.add('needs-tap');
+    }, 3500);
+  }
+
+  if (openBtn) openBtn.addEventListener('click', openInvitation);
+  if (landing) {
+    /* Whole cover is tappable once "Tap to Open" is showing */
+    landing.addEventListener('click', function (e) {
+      if (!landing.classList.contains('needs-tap')) return;
+      if (e.target.closest && e.target.closest('a, button')) return;
+      openInvitation();
+    });
+  }
+  autoStart();
+  if (skipBtn) skipBtn.addEventListener('click', finishReveal);
+
+  if (video) {
+    video.addEventListener('ended', finishReveal);
+    video.addEventListener('error', function () {
+      if (opening && !finished) finishReveal();
+    });
+    video.addEventListener('timeupdate', function () {
+      if (video.duration && video.duration - video.currentTime < 0.12) finishReveal();
+    });
+    /* Re-warm hero mid-playback in case the early pass was aborted */
+    video.addEventListener('playing', function () { ensureHeroReady(); }, { once: true });
+  }
+
+  /* ---------------------------------------------------------
+     6 · Scroll reveals  ·  start only after the site is visible
+     --------------------------------------------------------- */
+  var revealsStarted = false;
+  function initReveals() {
+    if (revealsStarted) return;
+    revealsStarted = true;
+
+    var els = document.querySelectorAll('.reveal');
+    if (!('IntersectionObserver' in window)) {
+      Array.prototype.forEach.call(els, function (el) { el.classList.add('in'); });
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        en.target.classList.add('in');
+        io.unobserve(en.target);
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+    Array.prototype.forEach.call(els, function (el) { io.observe(el); });
+  }
+
+  /* ---------------------------------------------------------
+     7 · Lazy sections  ·  hydrate gallery / portrait srcs late
+     --------------------------------------------------------- */
+  function activateLazySections() {
+    /* Native lazy already covers gallery + portraits. This only
+       upgrades any data-src deferrals if present. */
+    Array.prototype.forEach.call(
+      document.querySelectorAll('#gallery img[data-src], #couple img[data-src]'),
+      function (img) {
+        if (!img.getAttribute('src')) {
+          img.src = img.getAttribute('data-src');
+          img.removeAttribute('data-src');
+        }
+      }
+    );
+  }
+
+  /* ---------------------------------------------------------
+     7b · Gallery photo wall  ·  enter / float / parallax / touch
+     --------------------------------------------------------- */
+  function initGalleryWall() {
+    var wall = document.getElementById('photoWall');
+    if (!wall) return;
+
+    var cards = wall.querySelectorAll('.photo-card');
+    if (!cards.length) return;
+
+    var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function revealCard(card) {
+      if (card.classList.contains('is-in')) return;
+      card.classList.add('is-in');
+    }
+
+    if (reduceMotion || !('IntersectionObserver' in window)) {
+      Array.prototype.forEach.call(cards, revealCard);
+    } else {
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (en) {
+          if (!en.isIntersecting) return;
+          revealCard(en.target);
+          io.unobserve(en.target);
+        });
+      }, { threshold: 0.14, rootMargin: '0px 0px -6% 0px' });
+      Array.prototype.forEach.call(cards, function (card) { io.observe(card); });
+    }
+
+    /* Touch bounce + soft glow */
+    Array.prototype.forEach.call(cards, function (card) {
+      var clearTouch = function () {
+        card.classList.remove('is-touched');
+      };
+      card.addEventListener('pointerdown', function (e) {
+        if (e.pointerType === 'mouse') return;
+        card.classList.add('is-touched');
+        window.setTimeout(clearTouch, 560);
+      }, { passive: true });
+    });
+
+    if (reduceMotion) return;
+
+    /* Subtle scroll parallax — different speeds per card */
+    var ticking = false;
+    var speeds = [];
+    Array.prototype.forEach.call(cards, function (card, i) {
+      var raw = parseFloat(card.getAttribute('data-speed'));
+      speeds[i] = isNaN(raw) ? ((i % 2 === 0) ? 0.05 : -0.04) : raw;
+    });
+
+    function updateParallax() {
+      ticking = false;
+      var vh = window.innerHeight || 1;
+      var mid = vh * 0.5;
+      for (var i = 0; i < cards.length; i++) {
+        var card = cards[i];
+        if (!card.classList.contains('is-in')) continue;
+        var rect = card.getBoundingClientRect();
+        /* Skip far-offscreen work */
+        if (rect.bottom < -80 || rect.top > vh + 80) continue;
+        var offset = (rect.top + rect.height * 0.5 - mid) * speeds[i];
+        /* Clamp to keep motion almost invisible */
+        if (offset > 18) offset = 18;
+        if (offset < -18) offset = -18;
+        card.style.setProperty('--parallax-y', offset.toFixed(2) + 'px');
+      }
+    }
+
+    function onScroll() {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(updateParallax);
+    }
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll, { passive: true });
+    onScroll();
+  }
+
+  /* ---------------------------------------------------------
+     7c · Peacock walk  ·  strictly scroll-scrubbed, left → right
+     Position is a pure function of scroll progress through the band,
+     so it never moves on its own. Only transform is animated; the
+     bitmap itself is never stretched or warped.
+     --------------------------------------------------------- */
+  var peacockStarted = false;
+  function initPeacock() {
+    if (peacockStarted) return;
+    var band = document.getElementById('peacockWalk');
+    var bird = document.getElementById('peacock');
+    if (!band || !bird) return;
+    peacockStarted = true;
+
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      band.classList.add('is-static');
+      return;
+    }
+
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var ticking = false, visible = false;
+    var STEPS = 15;            /* footfalls across the whole walk */
+    var X_FROM = -40, X_TO = 112; /* vw: off-screen left → off-screen right */
+
+    var stage = document.getElementById('peacockStage');
+    function render() {
+      ticking = false;
+      var r = band.getBoundingClientRect();
+      var sh = stage ? stage.offsetHeight : 0;
+      var run = band.offsetHeight - sh;                 /* pinned scroll distance */
+      var p = run > 0 ? (vh - sh - r.top) / run : 0;    /* 0 when the strip pins, 1 when it releases */
+      p = p < 0 ? 0 : p > 1 ? 1 : p;
+
+      var x = (X_FROM + (X_TO - X_FROM) * p) * vw / 100;
+      var phase = p * STEPS * Math.PI;
+      var bob = -Math.abs(Math.sin(phase)) * 5;               /* 0 – 5px lift per step */
+      var rot = Math.sin(phase) * 1;                          /* ±1° */
+      var sc = 1 + Math.sin(p * Math.PI) * 0.03;              /* faint approach / recede */
+
+      bird.style.transform = 'translate3d(' + x.toFixed(1) + 'px,' + bob.toFixed(2) + 'px,0) rotate(' +
+        rot.toFixed(2) + 'deg) scale(' + sc.toFixed(3) + ')';
+    }
+    function onScroll() {
+      if (!visible || ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(render);
+    }
+    function onResize() {
+      vw = window.innerWidth; vh = window.innerHeight;
+      onScroll();
+    }
+
+    if ('IntersectionObserver' in window) {
+      new IntersectionObserver(function (entries) {
+        visible = entries[0].isIntersecting;
+        if (visible) render();
+      }, { rootMargin: '10% 0px 10% 0px' }).observe(band);
+    } else {
+      visible = true;
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onResize, { passive: true });
+    render();
+  }
+
+  /* ---------------------------------------------------------
+     8 · Countdown  ·  target lives in js/data.js (IST)
+     --------------------------------------------------------- */
+  (function countdown() {
+    var cfg = window.weddingData && window.weddingData.countdownTarget;
+    var target = new Date(cfg || '2027-02-07T10:00:00+05:30').getTime();
+    var d = document.getElementById('cdD'),
+        h = document.getElementById('cdH'),
+        m = document.getElementById('cdM'),
+        s = document.getElementById('cdS');
+    if (!d || isNaN(target)) return;
+
+    var pad = function (n) { return n < 10 ? '0' + n : String(n); };
+
+    function tick() {
+      var left = target - Date.now();
+      if (left <= 0) {
+        d.textContent = h.textContent = m.textContent = s.textContent = '00';
+        clearInterval(timer);
+        return;
+      }
+      var sec = Math.floor(left / 1000);
+      d.textContent = pad(Math.floor(sec / 86400));
+      h.textContent = pad(Math.floor(sec / 3600) % 24);
+      m.textContent = pad(Math.floor(sec / 60) % 60);
+      s.textContent = pad(sec % 60);
+    }
+    tick();
+    var timer = setInterval(tick, 1000);
+  })();
+
+  /* ---------------------------------------------------------
+     9 · Particles + THANK YOU finale
+     --------------------------------------------------------- */
+  function bootParticles() {
+    if (!window.KeralaParticles) return;
+    window.KeralaParticles.init();
+
+    var stage = document.getElementById('finaleStage');
+    if (!stage || !('IntersectionObserver' in window)) return;
+
+    var fo = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (en.isIntersecting && en.intersectionRatio >= 0.6) {
+          window.KeralaParticles.finale(stage);
+        } else if (!en.isIntersecting && en.boundingClientRect.top > 0) {
+          window.KeralaParticles.reset();
+        }
+      });
+    }, { threshold: [0, 0.6, 0.95] });
+
+    fo.observe(stage);
+  }
+
+  if (document.readyState === 'complete') bootParticles();
+  else window.addEventListener('load', bootParticles);
+
+  /* ---------------------------------------------------------
+     10 · Smooth anchor
+     --------------------------------------------------------- */
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest ? e.target.closest('a[href^="#"]') : null;
+    if (!a) return;
+    var id = a.getAttribute('href');
+    if (!id || id === '#') return;
+    var t = document.querySelector(id);
+    if (!t) return;
+    e.preventDefault();
+    t.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
-} else {
-  /* ---------- progressive frame sequence: coarse keyframes stay, a sliding window is decoded around the playhead ---------- */
-  const cv = $("#vid"), cx = cv.getContext("2d"), st = { v: 0 }, cache = [], pend = [];
-  const draw = () => {
-    const t = st.v * (N - 1), i = Math.floor(t), f = t - i;
-    const near = k => { for (let d = 0; d < N; d++) { if (cache[k - d]) return cache[k - d]; if (cache[k + d]) return cache[k + d] } };
-    const a = near(i); if (!a) return; cx.globalAlpha = 1; cx.drawImage(a, 0, 0, 540, 960);
-    const b = cache[Math.min(N - 1, i + 1)]; if (f > .03 && b && b !== a) { cx.globalAlpha = f; cx.drawImage(b, 0, 0, 540, 960); cx.globalAlpha = 1 }
-  };
-  const load = i => { if (i < 0 || i >= N || cache[i] || pend[i]) return; pend[i] = 1; const im = new Image(); im.decoding = "async"; im.onload = () => { cache[i] = im; pend[i] = 0; draw(); if (i === 0) boot() }; im.onerror = () => pend[i] = 0; im.src = fUrl(i) };
-  const want = c => { for (let d = -5; d <= 8; d++) load(c + d); cache.forEach((im, i) => { if (im && i % 4 && Math.abs(i - c) > 12) cache[i] = null }) };
-  const hy = ids => ids.forEach(id => { const e = document.getElementById(id); if (e && !e.src) e.src = e.dataset.s });
-  const boot = () => {           // after the first frame: coarse frames → artwork → photos, one step at a time
-    for (let i = 4; i < N; i += 4) load(i); load(N - 1);
-    setTimeout(() => document.querySelectorAll('img[data-s^="assets/art"]').forEach(e => e.src = e.dataset.s), 700);
-    setTimeout(() => hy(["cpImg", "cuImg"]), 2200); setTimeout(() => hy(["stImg", "fImg"]), 4200);
-  };
-  load(0);
 
-  gsap.registerPlugin(ScrollTrigger);
-  try { const lenis = new Lenis({ lerp: .1 }); lenis.on("scroll", ScrollTrigger.update); gsap.ticker.add(t => lenis.raf(t * 1000)); gsap.ticker.lagSmoothing(0) } catch (e) { }
-  const ARCH = "50% 32%";
-  gsap.set("#lBg,#lCouple,#lFol,#lFront,#lWater,#lPet", { transformOrigin: ARCH });
-  gsap.set("#vid", { transformOrigin: "48.4% 58.8%" });
-  const T = gsap.timeline({ defaults: { ease: "none" }, scrollTrigger: { trigger: "#spacer", start: "top top", end: "bottom bottom", scrub: 1 } });
-  const show = (s, a, b) => { T.fromTo(s, { autoAlpha: 0, scale: 1.08 }, { autoAlpha: 1, scale: 1, duration: 2, ease: "power2.out" }, a); if (b) T.to(s, { autoAlpha: 0, scale: .96, duration: 1.6 }, b) };
+  /* ---------------------------------------------------------
+     11 · Scroll progress bar
+     --------------------------------------------------------- */
+  (function () {
+    var bar = document.getElementById('scroll-progress');
+    if (!bar) return;
 
-  /* OpeningWorld + PalaceJourney (0–17): scroll scrubs the camera-flight frames */
-  T.to(st, { v: 1, duration: 17, onUpdate() { draw(); want(Math.round(st.v * (N - 1))) } }, 0);
-  T.to("#tIntro", { autoAlpha: 0, scale: 1.06, duration: 3 }, .5).to("#hint", { autoAlpha: 0, duration: 1 }, .2).to("#scrimT", { opacity: 0, duration: 3 }, .5);
-  show("#tJourney", 4, 10);
+    function updateBar() {
+      var el = document.documentElement;
+      var body = document.body;
+      var scrollTop = el.scrollTop || body.scrollTop;
+      var scrollHeight = (el.scrollHeight || body.scrollHeight) - el.clientHeight;
+      if (scrollHeight <= 0) { bar.style.width = '0%'; return; }
+      var pct = Math.min(100, Math.round((scrollTop / scrollHeight) * 1000) / 10);
+      bar.style.width = pct + '%';
+    }
 
-  /* DoorPortal (11–20): the glowing doorway itself becomes a window; the camera keeps pushing until the window fills the screen.
-     portal scales by s, lotus inside counter-scales so lotus ends at exactly 1:1 */
-  const Q = { v: 0 };
-  const portalApply = () => { const v = Q.v, s = 1 + 6 * v * v; gsap.set("#portal", { scale: s }); gsap.set("#lotus", { scale: (1.15 - .15 * v) / s }); gsap.set("#vid", { scale: 1 + .25 * v * v }) };
-  T.to("#vig", { opacity: 1, duration: 2.5 }, 11).to("#portal", { opacity: 1, duration: 1 }, 12.5)
-    .to("#lotus", { opacity: 1, duration: 2.5 }, 14).to("#glowIn", { opacity: 0, duration: 4 }, 14.5)
-    .to(Q, { v: 1, duration: 6.5, onUpdate: portalApply }, 13.5)
-    .set("#portal", { scale: 1, overflow: "visible", borderRadius: 0 }, 20).set("#lotus", { scale: 1 }, 20).set("#vid", { autoAlpha: 0 }, 20);
+    /* Only show once the site is revealed and user starts scrolling */
+    var barVisible = false;
+    function onScroll() {
+      if (!document.body.classList.contains('is-revealed')) return;
+      if (!barVisible) {
+        barVisible = true;
+        bar.classList.add('is-visible');
+      }
+      updateBar();
+    }
 
-  /* LotusWorld (13–36) */
-  T.fromTo("#lBg", { scale: 1.5, yPercent: -22 }, { scale: 1, yPercent: 0, duration: 23, ease: "power1.out" }, 13)
-    .fromTo("#lFront", { scale: 1.8, yPercent: -30 }, { scale: 1, yPercent: 0, duration: 23, ease: "power1.out" }, 13)
-    .fromTo("#lFol", { scale: 1.9, yPercent: -15 }, { scale: 1, yPercent: 0, duration: 23, ease: "power1.out" }, 13)
-    .fromTo("#lWater", { scale: 1.5, yPercent: -22 }, { scale: 1, yPercent: 0, duration: 23, ease: "power1.out" }, 13)
-    .to("#scrimL", { opacity: 1, duration: 2 }, 19);
-  show("#tCer", 20, 25); show("#tMuh", 26, 30.5); show("#tVen", 31, 36.5);
+    window.addEventListener('scroll', onScroll, { passive: true });
+  })();
 
-  /* CoupleReveal (37–46): photo rises into the heritage arch, lotus foliage stays in front */
-  T.fromTo("#couple", { autoAlpha: 0, scale: .94, yPercent: 4, clipPath: `inset(100% 0 0 0 ${CP})` }, { autoAlpha: 1, scale: 1, yPercent: 0, clipPath: `inset(0% 0 0 0 ${CP})`, duration: 5, ease: "power2.out" }, 37)
-    .to("#couple", { yPercent: -3, duration: 9 }, 42);
-  show("#tNames", 39, 46.5);
-
-  /* Cinematic close-up (46–64): the arch opens out to a near full-screen photograph */
-  T.fromTo("#closeup", { autoAlpha: 0, clipPath: clip(19, 27.5, 56, 28.5) }, { autoAlpha: 1, clipPath: CE, duration: 4, ease: "power2.inOut" }, 46.5)
-    .fromTo("#cuImg", { scale: 1.02, yPercent: 2 }, { scale: 1.16, yPercent: -2, duration: 17 }, 46.5)
-    .to("#lFol", { scale: 1.12, duration: 12 }, 46).to("#scrimL", { opacity: 0, duration: 3 }, 47)
-    .to("#couple", { autoAlpha: 0, duration: 1 }, 50);
-  T.to("#closeup", { autoAlpha: 0, duration: 6 }, 58);
-
-  /* LotusPortal (58–71): the arch grows around the camera; the peacock arch is seen through it, then fills the screen */
-  const S = { v: 0 };
-  const archApply = () => { const v = S.v, s = 1 + 6 * v * v;
-    gsap.set("#lBg,#lCouple,#lWater,#lPet,#pk2", { scale: s }); gsap.set("#lFol", { scale: 1.12 + 9 * v * v }); gsap.set("#lFront", { scale: 1 + 13 * v * v });
-    gsap.set("#peacock", { scale: (1.3 - .3 * v) / s }) };
-  T.to("#pk2", { autoAlpha: 1, duration: 3 }, 58.5).to("#lWarm", { opacity: 1, duration: 10 }, 58)
-    .to(S, { v: 1, duration: 11.5, onUpdate: archApply }, 59)
-    .set(["#lBg", "#lFol", "#lFront", "#lWater", "#lPet", "#lCouple", "#lWarm", "#closeup"], { autoAlpha: 0 }, 70.6)
-    .set("#pk2", { scale: 1, overflow: "visible", borderRadius: 0 }, 70.6).set("#peacock", { scale: 1 }, 70.6);
-
-  /* PeacockWorld: Groom, Bride (71–86) */
-  show("#tGroom", 71, 77.5); show("#tBride", 78.5, 85.5);
-
-  /* Second photo moment (86–97): arch-shaped reveal, slow zoom-out, warm light, vines in front */
-  T.fromTo("#story", { autoAlpha: 0, clipPath: clip(30, 20, 30, 20, "50% 50% 0 0/25% 25% 0 0") }, { autoAlpha: 1, clipPath: CE, duration: 4, ease: "power2.inOut" }, 86)
-    .fromTo("#stImg", { scale: 1.16, yPercent: 2.5 }, { scale: 1, yPercent: -2, duration: 12 }, 86)
-    .fromTo("#sun", { opacity: .15 }, { opacity: .6, duration: 8 }, 86)
-    .to("#story", { autoAlpha: 0, duration: 2.5 }, 94.5);
-
-  /* Reception (96–107): day melts into warm evening */
-  T.to("#kEve", { opacity: .78, duration: 5 }, 95).to("#kGlow", { scale: 1.25, duration: 6 }, 95).to("#kParts", { opacity: 1, duration: 5 }, 97);
-  show("#tRec", 98.5, 106);
-
-  /* ClosingPortrait (106–120) */
-  T.fromTo("#final", { autoAlpha: 0, clipPath: clip(30, 20, 30, 20, "50% 50% 0 0/25% 25% 0 0") }, { autoAlpha: 1, clipPath: CE, duration: 4, ease: "power2.inOut" }, 106.5)
-    .fromTo("#fPhoto", { scale: 1 }, { scale: 1.12, duration: 13.5 }, 106.5).fromTo("#fFg", { scale: 1.35 }, { scale: 1, duration: 9, ease: "power1.out" }, 106.5)
-    .to("#kParts", { opacity: 0, duration: 2 }, 107);
-  show("#tFinal", 111);
-  T.to({}, { duration: 0 }, 120);
-}
+})();
