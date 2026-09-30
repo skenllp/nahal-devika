@@ -649,67 +649,228 @@
   }
 
   /* ---------------------------------------------------------
-     7c · Peacock walk  ·  strictly scroll-scrubbed, left → right
-     Position is a pure function of scroll progress through the band,
-     so it never moves on its own. Only transform is animated; the
-     bitmap itself is never stretched or warped.
+     7c · Peacock walk  ·  cinematic, strictly scroll-scrubbed
+     The section is one pinned stage. Scroll progress p (0 → 1) drives:
+
+       0.00–0.20  peacock enters from the left
+       0.20–0.55  peacock walks, "Two families, one celebration" shown
+       0.55–0.70  intro text fades, background softens, peacock slows
+       0.70–0.82  golden feather detaches and floats to the centre
+       0.82–0.92  feather sweeps across; "Nahal & Devika" is written
+       0.92–1.00  date + blessing appear, peacock/feather fade, hand-off
+
+     Nothing is timed except the 260ms stagger between the two intro
+     lines. Only transform / opacity (and SVG stroke offsets while the
+     names are being written) are touched, and every write is skipped
+     when the value has not changed.
      --------------------------------------------------------- */
   var peacockStarted = false;
   function initPeacock() {
     if (peacockStarted) return;
     var band = document.getElementById('peacockWalk');
     var bird = document.getElementById('peacock');
-    if (!band || !bird) return;
+    var stage = document.getElementById('peacockStage');
+    if (!band || !bird || !stage) return;
     peacockStarted = true;
 
-    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      band.classList.add('is-static');
-      return;
+    /* Reduced motion: leave the calm static composition (no js-pw class). */
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    band.classList.add('js-pw');
+
+    function $(id) { return document.getElementById(id); }
+    var bg = $('pwBg'), glow = $('pwGlow'), far = $('pwFar'), dusts = $('pwDusts'),
+        intro = $('pwIntro'), reveal = $('pwReveal'), eyebrow = $('pwEyebrow'),
+        names = $('pwNames'), dateEl = $('pwDate'), bless = $('pwBlessing'),
+        shadow = $('pwShadow'), feather = $('pwFeather'), fade = $('pwFade'),
+        hedge = stage.querySelector('.pw-hedge');
+
+    /* ---- helpers ---- */
+    function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+    function seg(p, a, b) { return clamp01((p - a) / (b - a)); }
+    function smooth(t) { return t * t * (3 - 2 * t); }
+    function easeIO(t) { return 0.5 - 0.5 * Math.cos(Math.PI * t); }
+    function lerp(a, b, t) { return a + (b - a) * t; }
+    var cache = {};
+    function setStyle(el, key, prop, val) {           /* write only when changed */
+      if (cache[key] === val) return;
+      cache[key] = val;
+      el.style[prop] = val;
+    }
+    function setT(el, key, x, y, extra) {
+      setStyle(el, key, 'transform', 'translate3d(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px,0)' + (extra || ''));
+    }
+    function setO(el, key, o) { setStyle(el, key, 'opacity', o < 0.004 ? '0' : o.toFixed(3)); }
+
+    /* ---- glyph geometry (fractions of the SVG viewBox width) ---- */
+    var glyphs = [];
+    var vbParts = names.getAttribute('viewBox').split(/\s+/).map(Number);
+    Array.prototype.forEach.call(names.querySelectorAll('.pw-glyph'), function (g) {
+      var bb = g.getBBox();
+      glyphs.push({
+        fill: g.querySelector('.pw-g-fill'),
+        stroke: g.querySelector('.pw-g-stroke'),
+        s: (bb.x - vbParts[0]) / vbParts[2],
+        w: bb.width / vbParts[2]
+      });
+    });
+
+    /* ---- measurements (only on load / resize) ---- */
+    var vw = 0, sh = 0, birdW = 0, birdH = 0, birdB = 0, fw = 0, fh = 0, mobile = false;
+    var nm = { l: 0, t: 0, w: 0, h: 0 };
+    var revealY = 0;
+    function measure() {
+      vw = window.innerWidth; sh = stage.offsetHeight;
+      mobile = vw <= 600;
+      birdW = bird.offsetWidth || 120;
+      birdH = bird.offsetHeight || birdW * 1.02;
+      birdB = parseFloat(window.getComputedStyle(bird).bottom) || 30;
+      fw = feather.offsetWidth || 26; fh = feather.offsetHeight || fw * 4;
+      var sr = stage.getBoundingClientRect(), nr = names.getBoundingClientRect();
+      nm.l = nr.left - sr.left; nm.t = nr.top - sr.top - revealY; nm.w = nr.width; nm.h = nr.height;
     }
 
-    var vw = window.innerWidth, vh = window.innerHeight;
-    var ticking = false, visible = false;
-    var STEPS = 9;             /* footfalls across the whole walk */
-    var X_FROM = -40, X_TO = 112; /* vw: off-screen left → off-screen right */
+    /* peacock head position as a fraction of screen width, by progress.
+       Slopes decrease after 0.55 → the bird visibly slows. */
+    var KF_D = [[0, 0], [0.20, 0.22], [0.55, 0.62], [0.70, 0.78], [0.92, 0.90], [1, 0.93]];
+    var KF_M = [[0, 0], [0.20, 0.24], [0.55, 0.60], [0.70, 0.76], [0.92, 0.86], [1, 0.88]];
+    function front(p) {
+      var k = mobile ? KF_M : KF_D;
+      for (var i = 1; i < k.length; i++) {
+        if (p <= k[i][0]) return lerp(k[i - 1][1], k[i][1], (p - k[i - 1][0]) / (k[i][0] - k[i - 1][0]));
+      }
+      return k[k.length - 1][1];
+    }
+    function bez(t, a, b, c, d) {
+      var u = 1 - t;
+      return u * u * u * a + 3 * u * u * t * b + 3 * u * t * t * c + t * t * t * d;
+    }
 
-    var stage = document.getElementById('peacockStage');
+    var glyphState = -1;
+    var introOn = false;
+
     function render() {
       ticking = false;
       var r = band.getBoundingClientRect();
-      var sh = stage ? stage.offsetHeight : 0;
-      var run = band.offsetHeight - sh;                 /* pinned scroll distance */
-      var p = run > 0 ? (vh - sh - r.top) / run : 0;    /* 0 when the strip pins, 1 when it releases */
-      p = p < 0 ? 0 : p > 1 ? 1 : p;
+      var run = band.offsetHeight - sh;
+      var p = run > 0 ? clamp01(-r.top / run) : 0;
 
-      var x = (X_FROM + (X_TO - X_FROM) * p) * vw / 100;
-      var phase = p * STEPS * Math.PI;
-      var bob = -Math.abs(Math.sin(phase)) * 5;               /* 0 – 5px lift per step */
-      var rot = Math.sin(phase) * 1;                          /* ±1° */
-      var sc = 1 + Math.sin(p * Math.PI) * 0.03;              /* faint approach / recede */
+      /* --- intro lines: triggered as the stage arrives, staggered in CSS --- */
+      if (!introOn && r.top < sh * 0.4) { introOn = true; intro.classList.add('is-on'); }
+      else if (introOn && r.top > sh * 0.55) { introOn = false; intro.classList.remove('is-on'); }
 
-      bird.style.transform = 'translate3d(' + x.toFixed(1) + 'px,' + bob.toFixed(2) + 'px,0) rotate(' +
-        rot.toFixed(2) + 'deg) scale(' + sc.toFixed(3) + ')';
+      /* --- background: parallax, dimming, warm glow --- */
+      var soften = smooth(seg(p, 0.55, 0.70));
+      setT(bg, 'bg', 0, (0.5 - p) * sh * 0.09);
+      setO(bg, 'bgo', 1 - 0.3 * soften);
+      setT(far, 'far', -(p - 0.5) * vw * 0.08, 0);
+      setO(glow, 'glow', smooth(seg(p, 0.76, 0.92)));
+      setT(dusts, 'dust', 0, -p * sh * 0.05);
+      setO(dusts, 'dusto', 0.55 + 0.45 * seg(p, 0.5, 0.9));
+
+      /* --- intro text fade --- */
+      setO(intro, 'intro', 1 - soften);
+      setT(intro, 'introT', 0, -soften * 14);
+
+      /* --- peacock --- */
+      var f = front(p);
+      var bx = f * vw - birdW * 0.9;
+      var gain = 1 - 0.85 * seg(p, 0.70, 0.92);
+      var phase = f * (mobile ? 8 : 10) * Math.PI;
+      var lift = Math.abs(Math.sin(phase)) * (mobile ? 3 : 4.5) * gain;
+      var sway = Math.sin(phase) * 0.8 * gain;
+      var sc = 1 + Math.sin(Math.PI * seg(p, 0, 0.72)) * 0.025;
+      var out = smooth(seg(p, 0.93, 1));
+      setT(bird, 'bird', bx, -lift, ' rotate(' + sway.toFixed(2) + 'deg) scale(' + sc.toFixed(3) + ')');
+      setO(bird, 'birdo', 1 - out);
+      setT(shadow, 'shd', bx + birdW * 0.1, 0, ' scaleX(' + (1 - lift * 0.02).toFixed(3) + ')');
+      setO(shadow, 'shdo', (1 - out) * (1 - lift * 0.05));
+
+      /* --- feather: detach → float to centre → sweep (writing) → drift off --- */
+      var fo = smooth(seg(p, 0.68, 0.73)) * (1 - smooth(seg(p, 0.93, 0.99)));
+      var writing = seg(p, 0.82, 0.92);
+      var fx, fy, rot;
+      var birdTop = sh - birdB - birdH;
+      var penL = nm.l - nm.w * 0.03;
+      var penY0 = nm.t + nm.h * 0.76;
+      var wf = easeIO(writing) * 1.06;                 /* pen front, fraction of names width */
+      if (p < 0.82) {
+        var tt = seg(p, 0.68, 0.82), te = smooth(tt);
+        var p0x = bx + birdW * 0.42, p0y = birdTop + birdH * 0.2;
+        fx = bez(te, p0x, p0x - vw * 0.10, penL - vw * 0.05, penL) + Math.sin(tt * Math.PI * 3) * 8;
+        fy = bez(te, p0y, p0y - sh * 0.30, penY0 - sh * 0.20, penY0) + Math.sin(tt * Math.PI * 2.3) * 10 * (1 - tt);
+        rot = lerp(-25, 24, te) + Math.sin(tt * Math.PI * 4) * 9 * (1 - tt * 0.6);
+      } else if (p <= 0.92) {
+        fx = penL + wf * nm.w;
+        fy = penY0 + Math.sin(writing * Math.PI * 7) * nm.h * 0.05;
+        rot = 24 + Math.sin(writing * Math.PI * 6) * 3;
+      } else {
+        var d = seg(p, 0.92, 1);
+        fx = penL + 1.06 * nm.w + d * vw * 0.08;
+        fy = penY0 - smooth(d) * sh * 0.16;
+        rot = 24 + d * 18;
+      }
+      setO(feather, 'feo', fo);
+      setT(feather, 'fe', fx - fw / 2, fy - fh * 0.96, ' rotate(' + rot.toFixed(1) + 'deg)');
+
+      /* --- handwriting: outline is drawn, then gold ink fills in behind the pen --- */
+      var gs = p < 0.815 ? 0 : p > 0.935 ? 2 : 1;
+      if (gs === 1) {
+        for (var i = 0; i < glyphs.length; i++) {
+          var g = glyphs[i];
+          var sp = clamp01((wf - g.s + 0.008) / (g.w * 1.1 + 0.012));
+          var fp = clamp01((wf - g.s - g.w * 0.3) / (g.w * 1.1 + 0.03));
+          g.stroke.style.strokeDashoffset = (1 - sp).toFixed(3);
+          g.fill.style.fillOpacity = fp.toFixed(3);
+          g.stroke.style.strokeOpacity = (1 - 0.6 * fp).toFixed(2);
+        }
+      } else if (gs !== glyphState) {
+        for (var j = 0; j < glyphs.length; j++) {
+          glyphs[j].stroke.style.strokeDashoffset = gs === 2 ? '0' : '1';
+          glyphs[j].stroke.style.strokeOpacity = gs === 2 ? '.4' : '1';
+          glyphs[j].fill.style.fillOpacity = gs === 2 ? '1' : '0';
+        }
+      }
+      glyphState = gs;
+
+      /* --- supporting lines --- */
+      var e = smooth(seg(p, 0.78, 0.86));
+      setO(eyebrow, 'eb', e); setT(eyebrow, 'ebT', 0, (1 - e) * 10);
+      var dt = smooth(seg(p, 0.915, 0.955));
+      setO(dateEl, 'dt', dt); setT(dateEl, 'dtT', 0, (1 - dt) * 14);
+      var bl = smooth(seg(p, 0.945, 0.985));
+      setO(bless, 'bl', bl); setT(bless, 'blT', 0, (1 - bl) * 14);
+
+      /* --- hand-off to the next section --- */
+      revealY = -smooth(seg(p, 0.94, 1)) * sh * 0.03;
+      setT(reveal, 'rev', 0, revealY);
+      setO(fade, 'fade', out);
     }
+
+    var ticking = false, visible = false;
     function onScroll() {
       if (!visible || ticking) return;
       ticking = true;
       window.requestAnimationFrame(render);
     }
     function onResize() {
-      vw = window.innerWidth; vh = window.innerHeight;
-      onScroll();
+      cache = {}; glyphState = -1;
+      revealY = 0; reveal.style.transform = '';
+      measure(); onScroll();
     }
 
+    measure();
     if ('IntersectionObserver' in window) {
       new IntersectionObserver(function (entries) {
         visible = entries[0].isIntersecting;
+        stage.classList.toggle('is-live', visible);      /* dust animates only while on screen */
         if (visible) render();
       }, { rootMargin: '10% 0px 10% 0px' }).observe(band);
     } else {
-      visible = true;
+      visible = true; stage.classList.add('is-live');
     }
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', onResize, { passive: true });
+    window.addEventListener('load', onResize);
     render();
   }
 

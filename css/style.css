@@ -1575,61 +1575,189 @@ body.finale-particles .finale-fallback{opacity:0}
 
 
 /* ============================================================
-   PEACOCK WALK  ·  one scroll-scrubbed detail (left → right)
-   A short garden strip pins to the lower third of the screen while
-   the visitor scrolls past; the peacock crosses it left → right.
-   BACKGROUND → PEACOCK → FOREGROUND FOLIAGE
+   PEACOCK WALK  ·  cinematic, scroll-scrubbed storytelling scene
+   One pinned, full-screen stage (BACKGROUND → DUST → TEXT → PEACOCK →
+   FEATHER → FOREGROUND FOLIAGE). Everything is driven by scroll
+   progress from js/main.js — only transform / opacity are animated.
    ============================================================ */
 .scene--garden{
-  --pw-h:clamp(250px,32vh,350px);
-  --pw-run:clamp(560px,125vh,1100px);
+  --vh:100vh;
+  --pw-run:520vh;
+  --ground:clamp(60px,13vh,104px);      /* foreground hedge height   */
+  --bird-w:clamp(112px,30vw,236px);      /* peacock width             */
+  --bird-b:calc(var(--ground) * .5);     /* peacock feet above bottom */
   position:relative;z-index:1;display:block;
-  height:calc(var(--pw-h) + var(--pw-run));
-  background:linear-gradient(180deg,#150E07 0%,#1c2a1a 100%);
+  height:calc(var(--vh) + var(--pw-run));
+  background:#150E07;
 }
-.pw-caption{
-  position:absolute;top:clamp(34px,9%,64px);left:0;right:0;z-index:1;
-  display:flex;flex-direction:column;align-items:center;gap:12px;
-  color:var(--gold-lt);text-align:center;padding-inline:var(--safe-x,1.5rem);
-}
-.pw-caption .divider{opacity:.8}
-.pw-caption p{
-  font-family:var(--f-display);font-style:italic;font-weight:300;
-  font-size:clamp(17px,4.6vw,24px);letter-spacing:.04em;color:rgba(243,233,214,.78);
-}
+@supports (height:100svh){.scene--garden{--vh:100svh}}
+
 .pw-stage{
-  position:sticky;top:calc(100% - var(--pw-h));
-  height:var(--pw-h);z-index:2;overflow:hidden;contain:paint;
-  background:linear-gradient(180deg,#1c2a1a 0%,#3f5f3a 40%,#a4ae7f 74%,#EFE3CF 100%);
+  position:sticky;top:0;height:var(--vh);z-index:2;overflow:hidden;contain:paint;
+  background:#150E07;
 }
+.pw-bg{
+  position:absolute;left:0;right:0;top:-6%;height:112%;z-index:0;
+  background:linear-gradient(180deg,#150E07 0%,#1c2a1a 26%,#3f5f3a 56%,#a4ae7f 84%,#EFE3CF 100%);
+  will-change:transform,opacity;
+}
+.pw-glow{                                   /* warm lamp-light behind the names */
+  position:absolute;left:50%;top:38%;z-index:0;width:min(120vw,900px);aspect-ratio:1.5;
+  margin:calc(min(120vw,900px) / -3) 0 0 calc(min(120vw,900px) / -2);
+  background:radial-gradient(closest-side,rgba(231,201,122,.22),rgba(193,150,47,.08) 55%,transparent 100%);
+  opacity:0;will-change:opacity;pointer-events:none;
+}
+.pw-far{                                     /* distant hedge — slower parallax layer */
+  position:absolute;z-index:0;left:-4%;right:-4%;bottom:calc(var(--ground) * .9);
+  width:108%;height:calc(var(--ground) * 1.25);opacity:.22;
+  pointer-events:none;will-change:transform;
+}
+
+/* --- golden dust ---------------------------------------------------- */
+.pw-dusts{position:absolute;inset:0;z-index:1;pointer-events:none;opacity:.9;will-change:transform,opacity}
+.pw-dust{
+  position:absolute;left:var(--x);top:var(--y);width:var(--s);height:var(--s);border-radius:50%;
+  background:radial-gradient(circle,#F6E3A1 0,rgba(231,201,122,.55) 45%,rgba(231,201,122,0) 72%);
+  box-shadow:0 0 6px 1px rgba(231,201,122,.35);
+  opacity:0;animation:pwDust var(--d) linear var(--t) infinite;animation-play-state:paused;
+}
+.pw-stage.is-live .pw-dust{animation-play-state:running}
+@keyframes pwDust{
+  0%{opacity:0;transform:translate3d(0,0,0)}
+  18%{opacity:.75}
+  70%{opacity:.5}
+  100%{opacity:0;transform:translate3d(var(--dx),-70px,0)}
+}
+
+/* --- text ------------------------------------------------------------ */
+.pw-center{
+  position:absolute;left:0;right:0;top:0;z-index:2;
+  bottom:calc(var(--bird-b) + var(--bird-w) * .96);
+  display:grid;place-items:center;
+  padding:0 var(--safe-x,1.25rem);text-align:center;
+}
+.pw-intro,.pw-reveal{
+  grid-area:1/1;display:flex;flex-direction:column;align-items:center;
+  width:100%;will-change:opacity,transform;
+}
+.pw-intro{gap:clamp(6px,1.4vh,12px)}
+.pw-intro .divider{margin:0 auto clamp(10px,2vh,18px);opacity:0;transition:opacity 1.2s var(--ease)}
+.pw-intro.is-on .divider{opacity:.85}
+.pw-line{
+  font-family:var(--f-display);font-style:italic;font-weight:300;
+  font-size:clamp(28px,6.8vw,56px);line-height:1.14;letter-spacing:.02em;
+  color:rgba(243,233,214,.94);
+  opacity:0;transform:translate3d(0,20px,0);
+  transition:opacity 1.15s var(--ease),transform 1.15s var(--ease);
+}
+.pw-intro.is-on .pw-line{opacity:1;transform:none}
+.pw-intro.is-on .pw-l2{transition-delay:.26s}         /* second line ~260ms later */
+
+.pw-reveal{gap:clamp(12px,2.6vh,26px)}
+.pw-eyebrow{
+  font-family:var(--f-body);font-weight:300;text-transform:uppercase;
+  font-size:clamp(10px,2.7vw,13px);letter-spacing:.34em;padding-left:.34em;
+  color:var(--gold-lt);
+}
+.pw-names-svg{
+  display:block;width:min(86vw,780px,96vh);height:auto;overflow:visible;
+  --pw-sw:16;
+}
+.pw-g-fill{fill:url(#pwInk);fill-opacity:0}
+.pw-g-stroke{
+  fill:none;stroke:#F3E2A6;stroke-width:var(--pw-sw);stroke-linecap:round;stroke-linejoin:round;
+  stroke-dasharray:1;stroke-dashoffset:1;
+}
+.pw-date{
+  font-family:var(--f-title);font-size:clamp(17px,4.6vw,27px);
+  letter-spacing:.3em;padding-left:.3em;color:var(--gold-lt);
+}
+.pw-blessing{
+  font-family:var(--f-display);font-style:italic;font-weight:300;
+  font-size:clamp(15px,3.9vw,21px);letter-spacing:.04em;line-height:1.5;
+  color:rgba(243,233,214,.82);max-width:26em;text-wrap:balance;
+}
+
+/* --- peacock ---------------------------------------------------------- */
 .pw-bird{
-  position:absolute;z-index:2;left:0;bottom:clamp(18px,7%,30px);
-  width:clamp(128px,34vw,236px);height:auto;max-width:none;
+  position:absolute;z-index:3;left:0;bottom:var(--bird-b);
+  width:var(--bird-w);height:auto;max-width:none;
   transform:translate3d(-40vw,0,0);
   transform-origin:50% 100%;
-  will-change:transform;
+  will-change:transform,opacity;
   pointer-events:none;user-select:none;
   /* the supplied PNG's tail is cropped at its left edge — feather it so it fades like a real tail */
   -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 16%);
   mask-image:linear-gradient(90deg,transparent 0,#000 16%);
 }
-.pw-stage::after{
-  content:"";position:absolute;left:0;right:0;bottom:clamp(14px,6%,26px);height:22px;z-index:1;
-  background:radial-gradient(60% 100% at 50% 50%,rgba(20,32,18,.28),transparent 70%);pointer-events:none;
+.pw-shadow{                                  /* soft contact shadow, follows the bird */
+  position:absolute;z-index:2;left:0;bottom:calc(var(--bird-b) - 7px);
+  width:calc(var(--bird-w) * .8);height:16px;border-radius:50%;
+  background:radial-gradient(closest-side,rgba(14,22,12,.4),rgba(14,22,12,.14) 60%,transparent 100%);
+  transform:translate3d(-40vw,0,0);will-change:transform,opacity;pointer-events:none;
 }
+
+/* --- golden feather ------------------------------------------------- */
+.pw-feather{
+  position:absolute;z-index:4;left:0;top:0;
+  width:clamp(22px,2.4vw,32px);aspect-ratio:1/4;
+  transform-origin:50% 96%;opacity:0;
+  transform:translate3d(-100px,-100px,0);
+  will-change:transform,opacity;pointer-events:none;
+}
+.pw-feather svg{position:absolute;inset:0;width:100%;height:100%;display:block;overflow:visible}
+.pw-halo{
+  position:absolute;left:-95%;top:-2%;width:290%;height:62%;border-radius:50%;
+  background:radial-gradient(closest-side,rgba(240,217,143,.42),rgba(231,201,122,.12) 60%,transparent 100%);
+}
+.pw-feather::after{                          /* glint at the quill tip */
+  content:"";position:absolute;left:50%;bottom:1%;width:9px;height:9px;margin:0 0 -4px -4px;border-radius:50%;
+  background:radial-gradient(circle,#FFF3C4 0,rgba(240,217,143,.6) 45%,transparent 75%);
+}
+
+/* --- foreground foliage + section blend ------------------------------ */
 .pw-hedge{
-  position:absolute;z-index:3;left:0;right:0;bottom:-1px;
-  width:100%;height:clamp(60px,26%,96px);
-  pointer-events:none;
+  position:absolute;z-index:5;left:0;right:0;bottom:-1px;
+  width:100%;height:var(--ground);pointer-events:none;will-change:opacity;
 }
-/* Reduced motion: no pinning, peacock rests at the right */
-.scene--garden.is-static{height:var(--pw-h)}
-.scene--garden.is-static .pw-caption{display:none}
-.scene--garden.is-static .pw-stage{position:relative;top:auto}
-.scene--garden.is-static .pw-bird{transform:translate3d(58vw,0,0)}
+.pw-fade{
+  position:absolute;z-index:6;left:0;right:0;bottom:0;height:42%;opacity:0;pointer-events:none;
+  background:linear-gradient(180deg,rgba(239,227,207,0) 0%,rgba(239,227,207,.72) 55%,#EFE3CF 100%);
+  will-change:opacity;
+}
+.pw-blend{                                    /* rises over the stage as it releases → soft hand-off */
+  position:absolute;z-index:7;left:0;right:0;bottom:0;height:calc(var(--vh) * .3);pointer-events:none;
+  background:linear-gradient(180deg,rgba(239,227,207,0),#EFE3CF 92%);
+}
+
+/* --- JS not run (or reduced motion): calm static composition ------- */
+.scene--garden:not(.js-pw){height:var(--vh)}
+.scene--garden:not(.js-pw) .pw-stage{position:relative}
+.scene--garden:not(.js-pw) .pw-intro,
+.scene--garden:not(.js-pw) .pw-feather,
+.scene--garden:not(.js-pw) .pw-dusts,
+.scene--garden:not(.js-pw) .pw-far{display:none}
+.scene--garden:not(.js-pw) .pw-g-fill{fill-opacity:1}
+.scene--garden:not(.js-pw) .pw-g-stroke{stroke-dashoffset:0;stroke-opacity:0}
+.scene--garden:not(.js-pw) .pw-bird{transform:translate3d(calc(100vw - var(--bird-w) - 6vw),0,0)}
+.scene--garden:not(.js-pw) .pw-shadow{transform:translate3d(calc(100vw - var(--bird-w) - 6vw + var(--bird-w) * .1),0,0)}
+.scene--garden:not(.js-pw) .pw-glow{opacity:1}
+.scene--garden:not(.js-pw) .pw-fade{opacity:.2}
+
+/* --- small screens ------------------------------------------------ */
+@media (max-width:600px){
+  .scene--garden{--pw-run:440vh}
+  .pw-names-svg{--pw-sw:34;width:min(90vw,96vh)}
+  .pw-dust:nth-child(n+8){display:none}      /* fewer particles */
+  .pw-feather{width:22px}
+}
+@media (max-height:520px) and (orientation:landscape){
+  .scene--garden{--ground:52px}
+  .pw-line{font-size:clamp(22px,5vh,34px)}
+  .pw-reveal{gap:8px}
+  .pw-blessing{font-size:14px}
+}
 @media (prefers-reduced-motion:reduce){
-  .scene--garden{height:var(--pw-h)}
-  .pw-caption{display:none}
-  .pw-stage{position:relative;top:auto}
-  .pw-bird{transform:translate3d(58vw,0,0)}
+  .pw-dust{animation:none;opacity:.45}
+  .pw-intro .divider,.pw-line{transition:none}
 }
